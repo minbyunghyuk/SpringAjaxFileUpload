@@ -2,6 +2,8 @@ package org.zerock.controller;
 
 import lombok.extern.log4j.Log4j;
 import net.coobird.thumbnailator.Thumbnailator;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -11,6 +13,7 @@ import org.springframework.ui.Model;
 import org.springframework.util.FileCopyUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.multipart.MultipartFile;
 import org.zerock.domain.AttachFileDTO;
@@ -18,6 +21,9 @@ import org.zerock.domain.AttachFileDTO;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -124,53 +130,52 @@ public class UploadController {
         if (uploadPath.exists() == false) {
             uploadPath.mkdirs();
         }
-        for(MultipartFile multipartFile : uploadFile){
+        for (MultipartFile multipartFile : uploadFile) {
             AttachFileDTO attachFileDTO = new AttachFileDTO();
-            String uploadFileName= multipartFile.getOriginalFilename();
+            String uploadFileName = multipartFile.getOriginalFilename();
 
             // ID has File path
-            uploadFileName=uploadFileName.substring(uploadFileName.lastIndexOf("//")+1);
+            uploadFileName = uploadFileName.substring(uploadFileName.lastIndexOf("//") + 1);
             log.info("lastindexof");
             attachFileDTO.setFileName(uploadFileName);
-            UUID uuid= UUID.randomUUID();
-            uploadFileName= uuid.toString()+"_" + uploadFileName;
+            UUID uuid = UUID.randomUUID();
+            uploadFileName = uuid.toString() + "_" + uploadFileName;
 
             try {
-                File saveFile=new File(uploadPath,uploadFileName);
+                File saveFile = new File(uploadPath, uploadFileName);
                 multipartFile.transferTo(saveFile);
 
                 attachFileDTO.setUuid(uuid.toString());
                 attachFileDTO.setUploadPath(uploadFolderPath);
                 //image file check
-                if(checkImageType(saveFile)){
+                if (checkImageType(saveFile)) {
                     attachFileDTO.setImage(true);
                     System.out.println("11111True");
-                    FileOutputStream thnumbnail = new FileOutputStream(new File(uploadPath, "s_"+uploadFileName));
-                    Thumbnailator.createThumbnail(multipartFile.getInputStream(),thnumbnail,100,100);
+                    FileOutputStream thnumbnail = new FileOutputStream(new File(uploadPath, "s_" + uploadFileName));
+                    Thumbnailator.createThumbnail(multipartFile.getInputStream(), thnumbnail, 100, 100);
                     thnumbnail.close();
                 }
                 list.add(attachFileDTO);
-            }
-            catch (Exception e){
+            } catch (Exception e) {
                 e.printStackTrace();
             }
 
         }
 
-        return new ResponseEntity<List<AttachFileDTO>>(list, HttpStatus.OK) ;
+        return new ResponseEntity<List<AttachFileDTO>>(list, HttpStatus.OK);
     }
 
     @GetMapping("/display")
     @ResponseBody
-    public ResponseEntity<byte[]> getFile(String fileName){
-        log.info("fileName"+ fileName);
-        File file = new File("D:\\upload\\"+fileName) ;
-        log.info("file: "+ file);
+    public ResponseEntity<byte[]> getFile(String fileName) {
+        log.info("fileName" + fileName);
+        File file = new File("D:\\upload\\" + fileName);
+        log.info("file: " + file);
 
-        ResponseEntity<byte[]>result = null;
-        try{
-            HttpHeaders headers= new HttpHeaders();
-            headers.add("Content-type",Files.probeContentType(file.toPath()));
+        ResponseEntity<byte[]> result = null;
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.add("Content-type", Files.probeContentType(file.toPath()));
             result = new ResponseEntity<byte[]>(FileCopyUtils.copyToByteArray(file), headers, HttpStatus.OK);
         } catch (IOException e) {
             e.printStackTrace();
@@ -179,6 +184,50 @@ public class UploadController {
     }
 
 
+    @GetMapping(value = "/download", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+    @ResponseBody //자바객체를 HTTP 응답으로 전송
+    //ResponseEntity는 HttpEntity를 상속받음으로써 HttpHeader와 body를 가질 수 있다.
+    // IE 대한 처리 추가  @requestHeader ,useragent
+    public ResponseEntity<Resource> downloadFile(@RequestHeader("User-Agent") String userAgent, String fileName) {
+        log.info("download File :" + fileName);
+        Resource resource = new FileSystemResource("D:\\upload\\" + fileName);
+        //다운로드할 파일이없으면
+        if (!resource.exists()) {
+            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+        }
+        String resourceName = resource.getFilename();
+        //remove UUID 추가 0327
+        assert resourceName != null;
+        String resourceOrignalName = resourceName.substring(resourceName.indexOf("_")+1);
+
+
+        HttpHeaders headers = new HttpHeaders();
+        try {
+            String downloadName;
+            if (userAgent.contains("Trident")) {
+                log.info("IE Browser");
+                downloadName = URLEncoder.encode(resourceOrignalName, "UTF-8").replaceAll("\\+", " ");
+                log.info("IE name" + downloadName);
+
+            } else if (userAgent.contains("Edge")) {
+                log.info("Edge Browser");
+                downloadName = URLEncoder.encode(resourceOrignalName, "UTF-8");
+                log.info("Edge name :" + downloadName);
+            } else {
+                log.info("chrome");
+                downloadName = new String(resourceOrignalName.getBytes("UTF-8"), "ISO_8859_1");
+            }
+            //headers.add("Content-Dispostition","attachment; filename="
+            //  + new String(resourceName.getBytes( StandardCharsets.UTF_8),StandardCharsets.ISO_8859_1));
+            headers.add("Content-Disposition", "attachment; filename=" + downloadName);
+
+        } catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
+        }
+        return new ResponseEntity<Resource>(resource, headers, HttpStatus.OK);
+
+
+    }
 
 
     private String getFolder() {

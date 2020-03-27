@@ -55,6 +55,9 @@
         }
         return true;
     }
+    function showImage(fileCallPath){
+        alert(fileCallPath);
+    }
 
     $(document).ready(function () {
         //파일 업로드 후 초기화
@@ -96,16 +99,16 @@
 
         });
 
+        //이미지파일이 아닌경우 첨부파일이 아이콘이 나오게 변경 0327
         function showuploadedFile(uploadResultAttr){
             var str= "";
 
             $(uploadResultAttr).each(function (i,obj) {
-                console.log(obj.fileName);
-                console.log(obj.filename);
                 if(!obj.image){
-
-                    str += "<li><img src='/resources/img/attach.png'>"
-                        +obj.fileName +"</li>"
+                    var fileCallPath = encodeURIComponent(obj.uploadPath+"/"+obj.uuid+"_"+obj.fileName);
+                    str+= "<li><a href='download?fileName='"+fileCallPath+"'>"
+                        +"<img src='/resources/img/attach.png'>"+obj.fileName+"</a></li>"
+                     //   str += "<li><img src='/resources/img/attach.png'>"+obj.fileName +"</li>"
                 }
                 else {
                    // str += "<li>" + obj.fileName + "</li>";
